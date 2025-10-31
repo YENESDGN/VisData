@@ -1,0 +1,17 @@
+{
+  "name": "visdata-root",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Root package to proxy npm commands to frontend",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "frontend:install": "npm --prefix frontend install"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
+    "chart.js": "^4.5.1",
+    "react-chartjs-2": "^5.3.1"
+  }
+}
