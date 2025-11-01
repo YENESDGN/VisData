@@ -194,9 +194,6 @@ The application uses OpenAI's GPT models to:
 - User-specific file access
 - CORS protection
 - Environment variables for sensitive data
-
-## 📄 License
-
 See LICENSE file for details.
 
 ## 🤝 Contributing
