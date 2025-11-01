@@ -81,8 +81,9 @@ export const RecentFilesSidebar = ({ onFileSelect }: RecentFilesSidebarProps) =>
           recentFiles.map((file, index) => (
             <div
               key={file.id}
-              className="w-full glass-effect hover:bg-white/10 border border-white/10 rounded-xl p-4 text-left transition-all duration-300 hover:scale-105 hover:border-white/30 group"
+              className="w-full glass-effect hover:bg-white/10 border border-white/10 rounded-xl p-4 text-left transition-all duration-300 hover:scale-105 hover:border-white/30 group cursor-pointer"
               style={{ animationDelay: `${index * 50}ms` }}
+              onClick={() => onFileSelect(file.id)}
             >
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -90,7 +91,7 @@ export const RecentFilesSidebar = ({ onFileSelect }: RecentFilesSidebarProps) =>
                     <FileSpreadsheet size={22} className="text-white" />
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onFileSelect(file.id)}>
+                <div className="flex-1 min-w-0">
                   <div className="text-white font-semibold text-sm truncate">
                     {file.file_name}
                   </div>
@@ -100,7 +101,10 @@ export const RecentFilesSidebar = ({ onFileSelect }: RecentFilesSidebarProps) =>
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDelete(file.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(file.id);
+                  }}
                   className="px-3 py-2 rounded-lg border border-white/10 text-red-300 bg-transparent opacity-0 group-hover:opacity-100 transition-colors duration-200 hover:bg-red-500/20 hover:border-red-400 hover:text-red-200"
                   title="Delete"
                 >

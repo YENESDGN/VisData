@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { apiChat } from '../lib/api';
 
-interface Message {
+export interface Message {
   id: string;
   text: string;
   type: 'user' | 'assistant';
@@ -10,19 +12,37 @@ interface Message {
 
 interface ChatAssistantProps {
   onFileUploadRequest?: () => void;
+  externalMessages?: Message[];
+  onMessageAdded?: (message: Message) => void;
 }
 
-export const ChatAssistant = ({ onFileUploadRequest }: ChatAssistantProps) => {
+export const ChatAssistant = ({ onFileUploadRequest, externalMessages, onMessageAdded }: ChatAssistantProps) => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! I can help you visualize your data. Upload a CSV or Excel file to get started, or ask me any questions about data visualization.',
+      text: user 
+        ? 'Hello! I can help you visualize your data. Ask me about your uploaded files, and I\'ll analyze them to recommend the best chart types and axis selections. For example, you can say "analyze my files" or "what\'s the best chart for file X".'
+        : 'Hello! I can help you visualize your data. Please sign in to access your files and get AI-powered recommendations.',
       type: 'assistant',
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastExternalMessageId = useRef<string>('');
+  
+  // Dışarıdan gelen mesajları dinle
+  useEffect(() => {
+    if (externalMessages && externalMessages.length > 0) {
+      const latestMessage = externalMessages[externalMessages.length - 1];
+      if (latestMessage.id !== lastExternalMessageId.current) {
+        setMessages((prev) => [...prev, latestMessage]);
+        lastExternalMessageId.current = latestMessage.id;
+      }
+    }
+  }, [externalMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,46 +52,95 @@ export const ChatAssistant = ({ onFileUploadRequest }: ChatAssistantProps) => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
+  const handleSend = async () => {
+    if (!inputValue.trim() || isLoading) return;
 
+    const userMessageText = inputValue.trim();
+    const loadingMessageId = `loading-${Date.now()}`;
+    
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputValue,
+      text: userMessageText,
       type: 'user',
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
+    setIsLoading(true);
+    
+    // Loading mesajı ekle
+    const loadingMessage: Message = {
+      id: loadingMessageId,
+      text: 'Thinking...',
+      type: 'assistant',
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, loadingMessage]);
 
-    setTimeout(() => {
-      const assistantResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: getAssistantResponse(inputValue),
-        type: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantResponse]);
-    }, 500);
-  };
-
-  const getAssistantResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-
-    if (input.includes('upload') || input.includes('file')) {
-      return 'Great! Click the "ADD YOUR FILE" button below to upload your CSV or Excel file. I\'ll help you create beautiful visualizations once your file is uploaded.';
+    try {
+      if (user) {
+        // Backend API ile konuş
+        const response = await apiChat(userMessageText);
+        
+        let responseText = response.response;
+        
+        // Eğer analiz sonucu varsa, detayları ekle
+        if (response.analysis && !response.analysis.error) {
+          const chartTypeNames: Record<string, string> = {
+            'bar': 'Bar Chart',
+            'line': 'Line Chart',
+            'pie': 'Pie Chart',
+            'scatter': 'Scatter Plot',
+            'area': 'Area Chart',
+            'table': 'Table'
+          };
+          
+          responseText += `\n\n📊 Analysis Details:\n` +
+            `• Chart Type: ${chartTypeNames[response.analysis.chartType] || response.analysis.chartType}\n` +
+            `• X-Axis: ${response.analysis.xColumn}\n` +
+            `• Y-Axis: ${response.analysis.yColumn}\n` +
+            `• Reasoning: ${response.analysis.reason}`;
+        }
+        
+        // Loading mesajını kaldır ve gerçek cevabı ekle
+        setMessages((prev) => {
+          const filtered = prev.filter(msg => msg.id !== loadingMessageId);
+          const assistantResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            text: responseText,
+            type: 'assistant',
+            timestamp: new Date(),
+          };
+          return [...filtered, assistantResponse];
+        });
+      } else {
+        // Kullanıcı giriş yapmamış
+        setMessages((prev) => {
+          const filtered = prev.filter(msg => msg.id !== loadingMessageId);
+          const assistantResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            text: 'Please sign in to use the AI assistant with file analysis features.',
+            type: 'assistant',
+            timestamp: new Date(),
+          };
+          return [...filtered, assistantResponse];
+        });
+      }
+    } catch (error: any) {
+      setMessages((prev) => {
+        const filtered = prev.filter(msg => msg.id !== loadingMessageId);
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}. Please try again.`,
+          type: 'assistant',
+          timestamp: new Date(),
+        };
+        return [...filtered, errorResponse];
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    if (input.includes('chart') || input.includes('graph') || input.includes('visualiz')) {
-      return 'I can help you create various types of charts: bar charts, line graphs, pie charts, scatter plots, and more. First, upload your data file, and I\'ll suggest the best visualization options based on your data.';
-    }
-
-    if (input.includes('help') || input.includes('how')) {
-      return 'Here\'s how to get started:\n1. Upload a CSV or Excel file using the button below\n2. I\'ll analyze your data automatically\n3. Choose from suggested chart types\n4. Customize your visualization\n5. Save it to your library for future access';
-    }
-
-    return 'I\'m here to help you visualize your data! Upload a file to get started, or ask me about chart types, data formats, or anything else related to data visualization.';
   };
 
   return (
@@ -138,12 +207,16 @@ export const ChatAssistant = ({ onFileUploadRequest }: ChatAssistantProps) => {
           />
           <button
             onClick={handleSend}
-            disabled={!inputValue.trim()}
+            disabled={!inputValue.trim() || isLoading}
             className="group relative w-14 h-14 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
           >
         <div className="absolute inset-0 bg-gradient-to-br from-white to-neutral-600 group-hover:from-white group-hover:to-neutral-500"></div>
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity shimmer"></div>
-            <Send size={22} className="relative text-white mx-auto" />
+            {isLoading ? (
+              <Loader2 size={22} className="relative text-white mx-auto animate-spin" />
+            ) : (
+              <Send size={22} className="relative text-white mx-auto" />
+            )}
           </button>
         </div>
       </div>

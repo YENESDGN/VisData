@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, BarChart3, LineChart, PieChart, Save } from 'lucide-react';
+import { ArrowLeft, BarChart3, LineChart, PieChart, Save, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { apiGetVisualizationData } from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
+import { useChat } from '../contexts/ChatContext';
+import { apiGetVisualizationData, apiAnalyzeFileForChart } from '../lib/api';
 
 interface VisualizationPageProps {
   fileId: string;
@@ -17,7 +19,11 @@ export const VisualizationPage = ({ fileId, fileName, onBack }: VisualizationPag
   
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<{ chartType: string; xColumn: string; yColumn: string; reason: string } | null>(null);
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { addMessage } = useChat();
 
   useEffect(() => {
     loadFileData();
@@ -28,12 +34,82 @@ export const VisualizationPage = ({ fileId, fileName, onBack }: VisualizationPag
       const res = await apiGetVisualizationData(Number(fileId));
       setColumns(res.columns || []);
       setRows(res.data || []);
-      // X/Y otomatik seçim, aşağıdaki effect ayrıca chartType'a göre günceller
-      if ((res.columns || []).length >= 2) setSelectedColumns({ x: res.columns[0], y: res.columns[1] });
+      
+      // AI analizi yap
+      setAnalyzing(true);
+      try {
+        const aiAnalysis = await apiAnalyzeFileForChart(Number(fileId));
+        setAiRecommendation(aiAnalysis);
+        
+        // AI önerilerini uygula
+        if (aiAnalysis.xColumn && aiAnalysis.yColumn) {
+          setSelectedColumns({ 
+            x: aiAnalysis.xColumn, 
+            y: aiAnalysis.yColumn 
+          });
+        }
+        
+        if (aiAnalysis.chartType) {
+          const validChartTypes: ('bar' | 'line' | 'pie' | 'scatter' | 'area' | 'table')[] = ['bar', 'line', 'pie', 'scatter', 'area', 'table'];
+          if (validChartTypes.includes(aiAnalysis.chartType as any)) {
+            setChartType(aiAnalysis.chartType as any);
+          }
+        }
+        
+        // Chatbot'a AI analizi sonuçlarını gönder
+        const chartTypeNames: Record<string, string> = {
+          'bar': 'Çubuk Grafik',
+          'line': 'Çizgi Grafik',
+          'pie': 'Pasta Grafik',
+          'scatter': 'Dağılım Grafiği',
+          'area': 'Alan Grafiği',
+          'table': 'Tablo'
+        };
+        
+        // Eğer hata varsa, chatbot'a özel mesaj gönder
+        if (aiAnalysis.error) {
+          const errorMessage = `⚠️ ${aiAnalysis.reason}\n\n` +
+            `Grafik ayarları otomatik olarak varsayılan değerlere ayarlandı:\n` +
+            `• Grafik Tipi: ${chartTypeNames[aiAnalysis.chartType] || aiAnalysis.chartType}\n` +
+            `• X Ekseni: ${aiAnalysis.xColumn}\n` +
+            `• Y Ekseni: ${aiAnalysis.yColumn}\n\n` +
+            `İsterseniz bu ayarları manuel olarak değiştirebilirsiniz.`;
+          
+          addMessage(errorMessage, 'assistant');
+          showToast(aiAnalysis.reason, 7000);
+        } else {
+          const chatMessage = `📊 Dosya Analizi Tamamlandı!\n\n` +
+            `Önerilen Grafik Tipi: ${chartTypeNames[aiAnalysis.chartType] || aiAnalysis.chartType}\n` +
+            `X Ekseni: ${aiAnalysis.xColumn}\n` +
+            `Y Ekseni: ${aiAnalysis.yColumn}\n\n` +
+            `📝 Açıklama: ${aiAnalysis.reason}\n\n` +
+            `Grafik ayarları otomatik olarak uygulandı. İsterseniz değiştirebilirsiniz.`;
+          
+          addMessage(chatMessage, 'assistant');
+          showToast(`AI önerisi: ${aiAnalysis.reason}`, 7000);
+        }
+      } catch (err) {
+        console.error('AI analizi hatası:', err);
+        // Hata durumunda varsayılan ayarlar
+        if ((res.columns || []).length >= 2) {
+          setSelectedColumns({ x: res.columns[0], y: res.columns[1] });
+        }
+        
+        // Chatbot'a hata mesajı gönder
+        addMessage(
+          '⚠️ AI analizi şu anda kullanılamıyor. Varsayılan grafik ayarları kullanıldı. ' +
+          'Grafik tipini ve eksenleri manuel olarak ayarlayabilirsiniz.',
+          'assistant'
+        );
+      } finally {
+        setAnalyzing(false);
+      }
+      
       setTitle(`${fileName} Visualization`);
     } catch {
       setColumns([]);
       setRows([]);
+      setAnalyzing(false);
     }
   };
 
@@ -57,7 +133,8 @@ export const VisualizationPage = ({ fileId, fileName, onBack }: VisualizationPag
       const current = JSON.parse(localStorage.getItem(key) || '[]');
       current.unshift(payload);
       localStorage.setItem(key, JSON.stringify(current.slice(0, 100)));
-      alert('Saved to Library');
+      window.dispatchEvent(new Event('visdata-library-changed'));
+      showToast('Dosya başarıyla kütüphaneye eklendi', 5000);
     } finally {
       setSaving(false);
     }
@@ -255,6 +332,21 @@ export const VisualizationPage = ({ fileId, fileName, onBack }: VisualizationPag
             </div>
 
             <div className="lg:col-span-3 glass-effect border border-white/10 rounded-2xl p-8">
+              {analyzing && (
+                <div className="mb-4 glass-effect border border-purple-500/30 bg-purple-500/10 rounded-xl p-4 flex items-center space-x-3">
+                  <Sparkles size={20} className="text-purple-400 animate-pulse" />
+                  <span className="text-purple-200">AI dosyanızı analiz ediyor...</span>
+                </div>
+              )}
+              {aiRecommendation && !analyzing && (
+                <div className="mb-4 glass-effect border border-blue-500/30 bg-blue-500/10 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Sparkles size={18} className="text-blue-400" />
+                    <span className="text-blue-200 font-semibold">AI Önerisi</span>
+                  </div>
+                  <p className="text-sm text-blue-100">{aiRecommendation.reason}</p>
+                </div>
+              )}
               <div className="h-[500px] w-full flex items-center justify-center">
                 {isLoading && (
                   <div className="text-xl text-white">Loading...</div>

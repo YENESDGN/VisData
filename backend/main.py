@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import models, connection
-from routers import users, auth, files, visualize # YENİ
+from routers import users, auth, files, visualize,ai
 
 # Veritabanı tablolarını oluştur (eğer yoksa)
 # Artık UserDB ve FileDB tablolarını da oluşturacak
@@ -37,6 +37,12 @@ app.include_router(
     prefix="/users",
     tags=["Users"]
 )
+app.include_router(
+    ai.router,
+    prefix="/ai",
+    tags=["AI ChatBot"]
+)
+# --- BİTTİ ---
 app.include_router(
     files.router,
     prefix="/files",

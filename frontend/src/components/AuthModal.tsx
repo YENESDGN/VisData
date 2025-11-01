@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const AuthModal = ({ isOpen, onClose, defaultMode = 'login' }: AuthModalP
   const [loading, setLoading] = useState(false);
 
   const { signIn, signUp } = useAuth();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
@@ -36,10 +38,12 @@ export const AuthModal = ({ isOpen, onClose, defaultMode = 'login' }: AuthModalP
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) throw error;
+        showToast('Giriş Başarılı', 5000);
         onClose();
       } else {
         const { error } = await signUp(email, password, fullName);
         if (error) throw error;
+        showToast('Kayıt Olundu', 5000);
         onClose();
       }
     } catch (err: any) {

@@ -1,0 +1,16 @@
+# Database Configuration
+database_url=sqlite:///./visdata.db
+
+# Security
+SECRET_KEY=your-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# OpenAI API (Optional - for AI features)
+openai_api_key=your-openai-api-key-here
+
+# Bu dosyayı .env.example olarak kopyalayın:
+# cp ENV_EXAMPLE.txt .env.example
+# veya
+# copy ENV_EXAMPLE.txt .env.example
+
