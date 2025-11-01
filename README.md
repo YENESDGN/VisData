@@ -203,11 +203,3 @@ See LICENSE file for details.
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📧 Contact
-
-For questions or support, please open an issue on GitHub.
-
----
-
-Made with ❤️ using FastAPI, React, and OpenAI
-
